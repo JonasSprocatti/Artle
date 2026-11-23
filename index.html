@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Artle</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral+SC:wght@600;700&family=Spectral:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: uma coluna central, "mesa de jogo" escura; a arte é a peça principal, dicas abaixo como cartas de inventário. */
+:root{
+  --bg:#14110f;          /* feltro escuro, levemente quente */
+  --panel:#1f1a17;
+  --panel-2:#2a2420;
+  --line:#3a322c;
+  --fg:#efe6da;
+  --muted:#a99c8c;
+  --accent:#d9a441;      /* latão / borda de carta antiga */
+  --ok:#5fae6e;
+  --bad:#c4543f;
+  --skip:#6b6158;
+  --font-display:"Spectral SC", Georgia, "Times New Roman", serif;
+  --font-body:"Spectral", Georgia, "Times New Roman", serif;
+  --font-mono:"IBM Plex Mono", ui-monospace, Consolas, monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:17px/1.5 var(--font-body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px 40px}
+.wrap{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font:700 2rem/1 var(--font-display);letter-spacing:.06em;margin:0;color:var(--accent)}
+h1 small{display:block;font:400 .8rem/1.4 var(--font-body);letter-spacing:0;color:var(--muted);margin-top:4px}
+.icon-btns{display:flex;gap:8px}
+button{font:inherit;color:inherit;cursor:pointer}
+.ghost{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:.9rem}
+.ghost:hover{border-color:var(--accent)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.modes{display:flex;gap:6px;flex-wrap:wrap}
+.mode{background:transparent;border:1px solid var(--line);border-radius:999px;padding:5px 14px;font-size:.92rem;color:var(--muted)}
+.mode[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#1a1410;font-weight:600}
+.mode .done{font-size:.75rem;margin-left:4px}
+.picker{display:flex;flex-direction:column;gap:6px}
+.lbl-row{font:500 .7rem/1 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:4px}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:-1px;border:1px solid rgba(0,0,0,.4)}
+
+.status{display:flex;justify-content:space-between;align-items:baseline;font-family:var(--font-mono);font-size:.9rem;color:var(--muted);gap:10px;flex-wrap:wrap}
+.status strong{color:var(--fg);font-weight:500}
+#timer{font-variant-numeric:tabular-nums;color:var(--fg)}
+
+.frame{position:relative;border-radius:10px;padding:10px;background:linear-gradient(160deg,#3b3026,#1b1613);border:1px solid var(--line);box-shadow:0 10px 30px rgba(0,0,0,.45)}
+.art{position:relative;overflow:hidden;border-radius:4px;aspect-ratio:626/457;max-width:100%;background:#0c0a09}
+.art img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .7s ease, filter .7s ease;will-change:transform}
+.art .msg{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);text-align:center;padding:20px}
+.pips{display:flex;gap:6px;margin-top:10px;justify-content:center}
+.pip{width:28px;height:8px;border-radius:2px;background:var(--panel-2)}
+.pip.bad{background:var(--bad)} .pip.skip{background:var(--skip)} .pip.ok{background:var(--ok)}
+
+.guess-row{display:flex;gap:8px;position:relative}
+.ac{position:relative;flex:1;min-width:0}
+#guess{width:100%;padding:12px 14px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--fg);font:inherit}
+#guess::placeholder{color:var(--muted)}
+.primary{background:var(--accent);color:#1a1410;border:0;border-radius:8px;padding:0 18px;font-weight:600}
+.primary:disabled,.ghost:disabled{opacity:.45;cursor:not-allowed}
+#suggest{position:absolute;z-index:5;left:0;right:0;top:calc(100% + 4px);margin:0;padding:4px;list-style:none;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;max-height:260px;overflow:auto}
+#suggest li{padding:7px 10px;border-radius:5px;cursor:pointer}
+#suggest li[aria-selected="true"],#suggest li:hover{background:var(--line)}
+.note{min-height:1.4em;font-size:.92rem;color:var(--muted);margin:-8px 0 0}
+
+.hints{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
+.hint{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px;min-width:0}
+.hint.locked{opacity:.45}
+.hint.wide{grid-column:1/-1}
+.hint .lbl{font:500 .7rem/1 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.hint .val{overflow-wrap:anywhere}
+.oracle{white-space:pre-line;font-size:.95rem}
+.mana{display:inline-flex;gap:3px;flex-wrap:wrap}
+.sym{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 4px;border-radius:999px;font:600 .75rem/1 var(--font-mono);color:#1a1410;background:#cbc2b3}
+.sym.W{background:#f4eccd}.sym.U{background:#8fc1e3}.sym.B{background:#9a8f8a}.sym.R{background:#e58c6a}.sym.G{background:#86c08c}
+
+.history{display:flex;flex-direction:column;gap:4px;margin:0;padding:0;list-style:none}
+.history li{display:flex;gap:10px;align-items:center;font-size:.95rem;color:var(--muted)}
+.history .tag{font:500 .72rem/1 var(--font-mono);padding:3px 6px;border-radius:4px;color:#1a1410}
+.history .tag.bad{background:var(--bad)} .history .tag.skip{background:var(--skip);color:var(--fg)} .history .tag.ok{background:var(--ok)}
+
+.result{background:var(--panel);border:1px solid var(--accent);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.result h2{margin:0;font:700 1.3rem/1.2 var(--font-display)}
+.result a{color:var(--accent)}
+.result .row{display:flex;gap:8px;flex-wrap:wrap}
+.result .countdown{font-family:var(--font-mono);font-size:.85rem;color:var(--muted)}
+
+dialog{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:12px;max-width:min(520px,calc(100vw - 32px));padding:20px}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+dialog h2{font:700 1.3rem var(--font-display);margin:0 0 12px}
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center;margin-bottom:14px}
+.stat-grid b{display:block;font:500 1.4rem var(--font-mono);font-variant-numeric:tabular-nums}
+.stat-grid span{font-size:.75rem;color:var(--muted)}
+.dist{display:flex;flex-direction:column;gap:4px;font-family:var(--font-mono);font-size:.85rem}
+.dist div{display:flex;gap:6px;align-items:center}
+.dist .bar{background:var(--panel-2);padding:2px 6px;border-radius:3px;text-align:right;min-width:24px}
+.dist .bar.hl{background:var(--ok);color:#1a1410}
+footer{font-size:.78rem;color:var(--muted);line-height:1.5}
+footer a{color:var(--muted)}
+@media (prefers-reduced-motion:reduce){.art img{transition:none}}
+@media (max-width:420px){.stat-grid{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Artle<small>Adivinhe a carta de Magic só pela arte</small></h1>
+    <div class="icon-btns">
+      <button class="ghost" id="btn-help" type="button">Como jogar</button>
+      <button class="ghost" id="btn-stats" type="button">Estatísticas</button>
+    </div>
+  </header>
+
+  <div class="picker">
+    <div class="lbl-row">Desafio do dia</div>
+    <div class="modes" role="group" aria-label="Desafio" id="challenges"></div>
+    <div class="lbl-row">Dificuldade</div>
+    <div class="modes" role="group" aria-label="Dificuldade" id="diffs"></div>
+  </div>
+
+  <div class="status">
+    <span id="label">Carta do dia</span>
+    <span>Tentativa <strong id="attempt">1</strong>/6 · ⏱ <span id="timer">0:00</span></span>
+  </div>
+
+  <div class="frame">
+    <div class="art" id="art"><div class="msg" id="art-msg">Invocando a carta…</div></div>
+    <div class="pips" id="pips"></div>
+  </div>
+
+  <form class="guess-row" id="form" autocomplete="off">
+    <div class="ac">
+      <input id="guess" type="text" placeholder="Nome da carta (em inglês)" aria-label="Seu palpite" aria-autocomplete="list" aria-controls="suggest" spellcheck="false">
+      <ul id="suggest" role="listbox" hidden></ul>
+    </div>
+    <button class="primary" id="btn-guess" type="submit">Chutar</button>
+    <button class="ghost" id="btn-skip" type="button" title="Conta como erro e libera a próxima dica">Pular</button>
+  </form>
+  <p class="note" id="note" aria-live="polite"></p>
+
+  <section class="result" id="result" hidden></section>
+
+  <section>
+    <div class="hints" id="hints"></div>
+  </section>
+
+  <ol class="history" id="history"></ol>
+
+  <footer>
+    Artle é um projeto de fã, gratuito e não oficial, permitido pela <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>. Não é aprovado nem endossado pela Wizards. Partes dos materiais usados são propriedade da Wizards of the Coast. ©Wizards of the Coast LLC.
+    Dados e imagens das cartas: <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>.
+  </footer>
+</div>
+
+<dialog id="dlg-help">
+  <h2>Como jogar</h2>
+  <p>Você vê só a arte de uma carta de Magic. Descubra qual é em até <b>6 tentativas</b>.</p>
+  <p>Cada erro (ou "Pular") libera uma dica: custo de mana, tipo, coleção, texto e artista.</p>
+  <p><b>Fácil</b>: arte inteira. <b>Médio</b>: começa com zoom num detalhe, que abre a cada erro. <b>Difícil</b>: zoom maior e desfoque, e as dicas demoram uma rodada a mais.</p>
+  <p>Todo dia tem o desafio <b>Geral</b> (qualquer carta) e um desafio para cada cor: branco, azul, preto, vermelho, verde, multicolor e incolor. Cada desafio e dificuldade tem a sua carta, que muda à meia-noite. O cronômetro começa quando a arte aparece. <b>Treino</b> sorteia cartas à vontade e não conta nas estatísticas.</p>
+  <button class="primary" type="button" style="padding:8px 18px" onclick="this.closest('dialog').close()">Bora</button>
+</dialog>
+
+<dialog id="dlg-stats">
+  <h2>Estatísticas · <span id="stats-mode"></span></h2>
+  <div class="stat-grid" id="stat-grid"></div>
+  <div class="dist" id="dist"></div>
+  <p style="margin-bottom:0"><button class="ghost" type="button" onclick="this.closest('dialog').close()">Fechar</button></p>
+</dialog>
+
+<script>
+(() => {
+"use strict";
+
+/* ---------- Config ---------- */
+const MAX_TRIES = 6;
+const EPOCH = Date.UTC(2026, 10, 23);       // Artle #1 = 23/11/2026
+const API = "https://api.scryfall.com";
+
+// Cartas conhecidas para a "carta do dia". Fácil de trocar/ampliar.
+const POOL = ["Sol Ring","Lightning Bolt","Counterspell","Llanowar Elves","Dark Ritual","Swords to Plowshares","Wrath of God","Serra Angel","Shivan Dragon","Birds of Paradise","Giant Growth","Doom Blade","Brainstorm","Ponder","Demonic Tutor","Vampiric Tutor","Cultivate","Kodama's Reach","Rampant Growth","Path to Exile","Thoughtseize","Tarmogoyf","Snapcaster Mage","Jace, the Mind Sculptor","Liliana of the Veil","Elspeth, Sun's Champion","Craterhoof Behemoth","Emrakul, the Aeons Torn","Ulamog, the Infinite Gyre","Griselbrand","Sheoldred, the Apocalypse","Atraxa, Praetors' Voice","The Ur-Dragon","Edgar Markov","Krenko, Mob Boss","Meren of Clan Nel Toth","Rhystic Study","Smothering Tithe","Cyclonic Rift","Arcane Signet","Lightning Greaves","Swiftfoot Boots","Eternal Witness","Sakura-Tribe Elder","Beast Within","Chaos Warp","Blasphemous Act","Toxic Deluge","Damnation","Supreme Verdict","Terminate","Fatal Push","Baneslayer Angel","Thragtusk","Primeval Titan","Grave Titan","Sun Titan","Consecrated Sphinx","Platinum Angel","Wurmcoil Engine","Solemn Simulacrum","Phyrexian Arena","Necropotence","Sylvan Library","Force of Will","Mana Drain","Dockside Extortionist","Ragavan, Nimble Pilferer","Goblin Guide","Monastery Swiftspear","Stoneforge Mystic","Mother of Runes","Dark Confidant","Avacyn, Angel of Hope","Akroma, Angel of Wrath","Progenitus","Kozilek, Butcher of Truth","Ugin, the Spirit Dragon","Karn Liberated","Teferi, Hero of Dominaria","Chandra, Torch of Defiance","Nissa, Who Shakes the World","Gideon, Ally of Zendikar","Garruk Wildspeaker","Vraska, Golgari Queen","Niv-Mizzet, Parun","Prossh, Skyraider of Kher","Kaalia of the Vast","Muldrotha, the Gravetide","Korvold, Fae-Cursed King","Yuriko, the Tiger's Shadow","Doubling Season","Parallel Lives","Panharmonicon","Lotus Petal","Mox Diamond","Chrome Mox","Ornithopter","Grim Lavamancer","Fireball","Pacifism","Grizzly Bears","Juzám Djinn","Thalia, Guardian of Thraben","Brimaz, King of Oreskos","Questing Beast","Death's Shadow","Uro, Titan of Nature's Wrath","Oko, Thief of Crowns","Murktide Regent","Fury","Solitude","Grief","Endurance","Lord of Atlantis","Elvish Archdruid","Ezuri, Renegade Leader","Shock","Hymn to Tourach","Sinkhole","Wild Growth","Mind Twist","Gaea's Cradle","Strip Mine","Wasteland"];
+
+const DIFFS = {
+  facil:   {name:"Fácil",   zoom:[1,1,1,1,1,1,1],           blur:[0,0,0,0,0,0,0], hintDelay:0},
+  medio:   {name:"Médio",   zoom:[3,2.5,2,1.6,1.3,1.1,1],   blur:[0,0,0,0,0,0,0], hintDelay:0},
+  dificil: {name:"Difícil", zoom:[5,4,3.1,2.4,1.8,1.3,1],   blur:[9,7,5,3,2,1,0], hintDelay:1},
+};
+// Desafios: "geral" usa a lista POOL; as cores usam as 175 cartas mais populares (EDHREC) daquela cor na Scryfall.
+const CHALLENGES = {
+  geral:  {name:"Geral",      daily:true},
+  w:      {name:"Branco",     daily:true, q:"c=w -t:land",  dot:"#f4eccd"},
+  u:      {name:"Azul",       daily:true, q:"c=u -t:land",  dot:"#8fc1e3"},
+  b:      {name:"Preto",      daily:true, q:"c=b -t:land",  dot:"#6f6560"},
+  r:      {name:"Vermelho",   daily:true, q:"c=r -t:land",  dot:"#e58c6a"},
+  g:      {name:"Verde",      daily:true, q:"c=g -t:land",  dot:"#86c08c"},
+  m:      {name:"Multicolor", daily:true, q:"c:m -t:land",  dot:"linear-gradient(135deg,#f4eccd,#8fc1e3,#6f6560,#e58c6a,#86c08c)"},
+  c:      {name:"Incolor",    daily:true, q:"c=c -t:land",  dot:"#b9b3ad"},
+  treino: {name:"Treino",     daily:false},
+};
+const HINTS = [
+  {key:"mana",   lbl:"Custo de mana"},
+  {key:"type",   lbl:"Tipo"},
+  {key:"set",    lbl:"Coleção e raridade"},
+  {key:"oracle", lbl:"Texto da carta", wide:true},
+  {key:"artist", lbl:"Artista"},
+];
+
+/* ---------- Utils ---------- */
+const $ = s => document.querySelector(s);
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem("artle:"+k); return v ? JSON.parse(v) : d; }catch{ return d; } },
+  set(k, v){ try{ localStorage.setItem("artle:"+k, JSON.stringify(v)); }catch{} },
+};
+function todayKey(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
+function dayNumber(){ const d=new Date(); return Math.floor((Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())-EPOCH)/864e5)+1; }
+function hash(str){ let h=2166136261; for(const c of str){ h^=c.charCodeAt(0); h=Math.imul(h,16777619); } return h>>>0; }
+function rng(seed){ return () => { seed = (seed + 0x6D2B79F5) >>> 0; let t = seed; t = Math.imul(t ^ t>>>15, t|1); t ^= t + Math.imul(t ^ t>>>7, t|61); return ((t ^ t>>>14)>>>0)/4294967296; }; }
+const norm = s => s.normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+function fmtTime(ms){ const s=Math.floor(ms/1000), h=Math.floor(s/3600), m=Math.floor(s%3600/60), r=s%60; return (h?h+":"+String(m).padStart(2,"0"):m)+":"+String(r).padStart(2,"0"); }
+function esc(s){ return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+/* ---------- Scryfall (fila simples: ~8 req/s, com cache) ---------- */
+let lastReq = 0;
+const memo = new Map();
+async function scry(path){
+  if (memo.has(path)) return memo.get(path);
+  const wait = Math.max(0, lastReq + 120 - Date.now());
+  lastReq = Date.now() + wait;
+  const p = new Promise(r => setTimeout(r, wait)).then(async () => {
+    const res = await fetch(API + path, {headers:{Accept:"application/json"}});
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) { const e = new Error(body.details || res.statusText); e.status = res.status; throw e; }
+    return body;
+  });
+  memo.set(path, p);
+  p.catch(() => memo.delete(path));
+  return p;
+}
+async function loadCard(name){
+  const cacheKey = "card:" + name;
+  const cached = store.get(cacheKey);
+  if (cached && cached.at > Date.now() - 7*864e5) return cached.card;
+  const c = await scry("/cards/named?fuzzy=" + encodeURIComponent(name));
+  const face = c.card_faces?.[0] ?? {};
+  const card = {
+    name: c.name,
+    faces: (c.card_faces?.map(f => f.name)) ?? [c.name],
+    art: c.image_uris?.art_crop ?? face.image_uris?.art_crop,
+    full: c.image_uris?.normal ?? face.image_uris?.normal,
+    mana: c.mana_cost ?? face.mana_cost ?? "",
+    cmc: c.cmc,
+    type: c.type_line ?? face.type_line,
+    oracle: c.oracle_text ?? c.card_faces?.map(f => f.oracle_text).join("\n—\n") ?? "",
+    set: c.set_name, year: (c.released_at || "").slice(0,4), rarity: c.rarity,
+    artist: c.artist, uri: c.scryfall_uri,
+  };
+  store.set(cacheKey, {at: Date.now(), card});
+  return card;
+}
+
+/* ---------- Estado ---------- */
+let challenge = CHALLENGES[store.get("challenge")] ? store.get("challenge") : "geral";
+let diff = DIFFS[store.get("diff")] ? store.get("diff") : "facil";
+let card = null, game = null, tick = null, focal = {x:50,y:50};
+const isDaily = () => CHALLENGES[challenge].daily;
+const D = () => DIFFS[diff];
+
+function gameKey(c, d){ return c === "treino" ? `game:treino:${d}` : `game:${c}:${d}:${todayKey()}`; }
+function newGame(c, d){
+  const base = {guesses:[], status:"playing", startedAt:null, elapsed:0};
+  if (c === "treino") return {...base, name: POOL[Math.floor(Math.random()*POOL.length)], seed: Math.floor(Math.random()*1e9)};
+  const seed = hash(`${todayKey()}:${c}:${d}:artle`);
+  if (c === "geral") return {...base, name: POOL[seed % POOL.length], seed};
+  return {...base, name: null, seed};           // cor: a carta é escolhida na primeira carga
+}
+async function resolveName(g){
+  if (g.name) return g.name;
+  const q = CHALLENGES[challenge].q + " game:paper -is:digital";
+  const res = await scry("/cards/search?order=edhrec&q=" + encodeURIComponent(q));
+  const list = (res.data || []).filter(c => c.image_uris?.art_crop || c.card_faces?.[0]?.image_uris?.art_crop);
+  if (!list.length) throw new Error("nenhuma carta encontrada");
+  g.name = list[g.seed % list.length].name;
+  return g.name;
+}
+function save(){ store.set(gameKey(challenge, diff), game); }
+function wrongCount(){ return game.guesses.filter(g => g.r !== "ok").length; }
+function elapsed(){ return game.elapsed + (game.status === "playing" && game.startedAt ? Date.now() - game.startedAt : 0); }
+function title(){ return isDaily() ? `Artle #${dayNumber()} · ${CHALLENGES[challenge].name} · ${D().name}` : `Artle · Treino · ${D().name}`; }
+
+/* ---------- Render ---------- */
+function renderPickers(){
+  $("#challenges").innerHTML = Object.entries(CHALLENGES).map(([k,c]) => {
+    const done = c.daily && Object.keys(DIFFS).some(d => (store.get(gameKey(k,d))||{}).status === "won") ? '<span class="done">✓</span>' : "";
+    return `<button class="mode" type="button" data-c="${k}" aria-pressed="${k===challenge}">${c.dot ? `<span class="dot" style="background:${c.dot}"></span>` : ""}${c.name}${done}</button>`;
+  }).join("");
+  $("#diffs").innerHTML = Object.entries(DIFFS).map(([k,d]) => {
+    const g = isDaily() ? store.get(gameKey(challenge,k)) : null;
+    const done = g && g.status !== "playing" ? `<span class="done">${g.status==="won"?"✓":"✗"}</span>` : "";
+    return `<button class="mode" type="button" data-d="${k}" aria-pressed="${k===diff}">${d.name}${done}</button>`;
+  }).join("");
+}
+function pauseCurrent(){
+  stopTimer();
+  if (game && game.status === "playing" && game.startedAt) { game.elapsed = elapsed(); game.startedAt = null; save(); }
+}
+function load(){
+  store.set("challenge", challenge); store.set("diff", diff);
+  game = store.get(gameKey(challenge, diff)) || newGame(challenge, diff);
+  save();
+  renderPickers();
+  $("#label").textContent = title();
+  start();
+}
+
+async function start(){
+  card = null;
+  $("#art").innerHTML = '<div class="msg">Invocando a carta…</div>';
+  $("#result").hidden = true; $("#note").textContent = "";
+  renderAll();
+  const myGame = game;
+  try {
+    const name = await resolveName(game);
+    if (myGame !== game) return;
+    save();
+    const c = await loadCard(name);
+    if (myGame !== game) return;
+    card = c;
+  } catch (e) {
+    if (myGame !== game) return;
+    $("#art").innerHTML = `<div class="msg">Não consegui falar com a Scryfall (${esc(e.message)}).<br>Confira a conexão e recarregue a página.</div>`;
+    return;
+  }
+  const r = rng(game.seed);
+  focal = {x: 20 + r()*60, y: 20 + r()*60};
+  const img = new Image();
+  img.alt = "Arte da carta misteriosa";
+  img.decoding = "async";
+  img.onload = () => {
+    if (myGame !== game) return;
+    $("#art").replaceChildren(img);
+    applyView(false);
+    if (game.status === "playing") { if (!game.startedAt) { game.startedAt = Date.now(); save(); } startTimer(); }
+    renderAll();
+  };
+  img.onerror = () => { $("#art").innerHTML = '<div class="msg">A imagem não carregou. Recarregue a página.</div>'; };
+  img.src = card.art;
+}
+
+function applyView(animate = true){
+  const img = $("#art img"); if (!img) return;
+  const cfg = D(), i = game.status === "playing" ? Math.min(wrongCount(), MAX_TRIES) : MAX_TRIES;
+  if (!animate) img.style.transition = "none";
+  img.style.transformOrigin = `${focal.x}% ${focal.y}%`;
+  img.style.transform = `scale(${cfg.zoom[i]})`;
+  img.style.filter = cfg.blur[i] ? `blur(${cfg.blur[i]}px)` : "none";
+  if (!animate) { img.offsetHeight; img.style.transition = ""; }
+}
+
+function renderAll(){
+  const w = wrongCount(), done = game.status !== "playing";
+  $("#attempt").textContent = Math.min(game.guesses.length + (done ? 0 : 1), MAX_TRIES);
+  $("#pips").innerHTML = Array.from({length:MAX_TRIES}, (_,i) => `<span class="pip ${game.guesses[i]?.r || ""}"></span>`).join("");
+  $("#history").innerHTML = game.guesses.map((g,i) =>
+    `<li><span class="tag ${g.r}">${g.r==="ok"?"ACERTO":g.r==="skip"?"PULOU":"ERRO"}</span>${esc(g.name || "—")}</li>`).join("");
+  renderHints();
+  $("#guess").disabled = $("#btn-guess").disabled = $("#btn-skip").disabled = done || !card;
+  $("#timer").textContent = fmtTime(elapsed());
+  if (done && card) renderResult();
+}
+
+function manaHTML(cost){
+  if (!cost) return "<i>sem custo</i>";
+  return '<span class="mana">' + cost.split("//").map(part =>
+    (part.match(/\{[^}]+\}/g) || []).map(t => { const s = t.slice(1,-1); return `<span class="sym ${/^[WUBRG]$/.test(s)?s:""}">${esc(s)}</span>`; }).join("")
+  ).join(" // ") + "</span>";
+}
+function redact(text){
+  let out = text;
+  const names = new Set();
+  for (const f of card.faces) { names.add(f); if (f.includes(",")) names.add(f.split(",")[0]); }
+  [...names].sort((a,b) => b.length - a.length).forEach(n => { out = out.split(n).join("~"); });
+  return out;
+}
+const RAR = {common:"Comum", uncommon:"Incomum", rare:"Rara", mythic:"Mítica", special:"Especial", bonus:"Bônus"};
+function hintValue(key){
+  switch (key) {
+    case "mana":   return `${manaHTML(card.mana)} <span style="color:var(--muted)">· valor de mana ${card.cmc}</span>`;
+    case "type":   return esc(card.type);
+    case "set":    return `${esc(card.set)} (${esc(card.year)}) · ${RAR[card.rarity] || esc(card.rarity)}`;
+    case "oracle": return `<div class="oracle">${esc(redact(card.oracle || "(sem texto)"))}</div>`;
+    case "artist": return esc(card.artist);
+  }
+}
+function renderHints(){
+  const done = game.status !== "playing";
+  const unlocked = done ? HINTS.length : Math.max(0, wrongCount() - D().hintDelay);
+  $("#hints").innerHTML = HINTS.map((h,i) => {
+    const open = card && i < unlocked;
+    const at = i + 1 + D().hintDelay;
+    return `<div class="hint ${h.wide?"wide":""} ${open?"":"locked"}"><div class="lbl">${h.lbl}</div><div class="val">${open ? hintValue(h.key) : (at <= MAX_TRIES - 1 ? `Libera após ${at} erro${at>1?"s":""}` : "Só no fim")}</div></div>`;
+  }).join("");
+}
+
+function shareText(){
+  const sq = game.guesses.map(g => g.r==="ok"?"🟩":g.r==="skip"?"⬛":"🟥").join("") + "⬜".repeat(MAX_TRIES - game.guesses.length);
+  const score = game.status === "won" ? `${game.guesses.length}/${MAX_TRIES}` : `X/${MAX_TRIES}`;
+  return `${title()}\n${sq} ${score} · ⏱ ${fmtTime(game.elapsed)}`;
+}
+function renderResult(){
+  const won = game.status === "won", errs = wrongCount();
+  const el = $("#result"); el.hidden = false;
+  el.innerHTML = `
+    <h2>${won ? "Acertou!" : "Não foi dessa vez"}</h2>
+    <div>A carta era <a href="${esc(card.uri)}" target="_blank" rel="noopener"><b>${esc(card.name)}</b></a>.</div>
+    <div style="font-family:var(--font-mono);font-size:.9rem">${won ? `${game.guesses.length}/${MAX_TRIES} tentativas · ${errs} erro${errs===1?"":"s"}` : `${errs} erros`} · ⏱ ${fmtTime(game.elapsed)}</div>
+    <div class="row">
+      <button class="primary" type="button" id="btn-share" style="padding:8px 16px">Copiar resultado</button>
+      <button class="ghost" type="button" id="btn-show-stats">Estatísticas</button>
+      ${challenge === "treino" ? '<button class="ghost" type="button" id="btn-next">Próxima carta</button>' : ""}
+    </div>
+    ${isDaily() ? '<div class="countdown" id="countdown"></div>' : ""}`;
+  $("#btn-share").onclick = async e => {
+    const t = shareText();
+    try { await navigator.clipboard.writeText(t); e.target.textContent = "Copiado!"; }
+    catch { $("#note").textContent = t; }
+  };
+  $("#btn-show-stats").onclick = openStats;
+  if ($("#btn-next")) $("#btn-next").onclick = () => { game = newGame("treino", diff); save(); start(); };
+  updateCountdown();
+}
+function updateCountdown(){
+  const el = $("#countdown"); if (!el) return;
+  const n = new Date(), mid = new Date(n.getFullYear(), n.getMonth(), n.getDate()+1);
+  el.textContent = "Próxima carta em " + fmtTime(mid - n);
+}
+
+/* ---------- Cronômetro ---------- */
+function startTimer(){ stopTimer(); tick = setInterval(() => { $("#timer").textContent = fmtTime(elapsed()); updateCountdown(); }, 500); }
+function stopTimer(){ clearInterval(tick); tick = null; }
+document.addEventListener("visibilitychange", () => {
+  // O tempo continua contando com a aba em segundo plano, como num cronômetro de verdade.
+  if (!document.hidden && game?.status === "playing" && card) $("#timer").textContent = fmtTime(elapsed());
+});
+
+/* ---------- Jogada ---------- */
+function finish(status){
+  game.elapsed = elapsed(); game.startedAt = null; game.status = status;
+  stopTimer(); save();
+  if (isDaily()) recordStats();
+  renderPickers();
+  applyView(); renderAll();
+  $("#result").scrollIntoView({behavior:"smooth", block:"nearest"});
+}
+function addGuess(name, r){
+  game.guesses.push({name, r});
+  if (r === "ok") return finish("won");
+  if (game.guesses.length >= MAX_TRIES) return finish("lost");
+  save(); applyView(); renderAll();
+}
+function isAnswer(name){
+  const n = norm(name);
+  return n === norm(card.name) || card.faces.some(f => norm(f) === n);
+}
+async function submitGuess(raw){
+  const text = raw.trim();
+  if (!text || !card || game.status !== "playing") return;
+  hideSuggest();
+  if (game.guesses.some(g => g.name && norm(g.name) === norm(text))) { $("#note").textContent = "Você já tentou essa."; return; }
+  if (isAnswer(text)) { $("#guess").value = ""; $("#note").textContent = ""; return addGuess(card.name, "ok"); }
+  // Confere se é uma carta que existe, para não punir erro de digitação.
+  $("#btn-guess").disabled = true;
+  try {
+    const c = await scry("/cards/named?exact=" + encodeURIComponent(text));
+    $("#guess").value = ""; $("#note").textContent = "";
+    if (isAnswer(c.name)) return addGuess(card.name, "ok");
+    if (game.guesses.some(g => g.name === c.name)) { $("#note").textContent = "Você já tentou essa."; return; }
+    addGuess(c.name, "bad");
+  } catch (e) {
+    $("#note").textContent = e.status === 404 ? "Não achei uma carta com esse nome. Escolha uma da lista." : "Erro ao consultar a Scryfall. Tente de novo.";
+  } finally {
+    $("#btn-guess").disabled = game.status !== "playing";
+  }
+}
+
+/* ---------- Autocomplete ---------- */
+let acTimer = null, acItems = [], acSel = -1, acSeq = 0;
+function hideSuggest(){ $("#suggest").hidden = true; acItems = []; acSel = -1; $("#guess").removeAttribute("aria-activedescendant"); }
+function showSuggest(list){
+  acItems = list.slice(0, 8); acSel = -1;
+  const ul = $("#suggest");
+  if (!acItems.length) return hideSuggest();
+  ul.innerHTML = acItems.map((n,i) => `<li role="option" id="opt${i}" data-i="${i}">${esc(n)}</li>`).join("");
+  ul.hidden = false;
+}
+function moveSel(d){
+  if (!acItems.length) return;
+  acSel = (acSel + d + acItems.length) % acItems.length;
+  document.querySelectorAll("#suggest li").forEach((li,i) => li.setAttribute("aria-selected", i === acSel));
+  $("#guess").setAttribute("aria-activedescendant", "opt"+acSel);
+}
+$("#guess").addEventListener("input", e => {
+  const q = e.target.value.trim();
+  clearTimeout(acTimer);
+  if (q.length < 2) return hideSuggest();
+  const seq = ++acSeq;
+  acTimer = setTimeout(async () => {
+    try { const r = await scry("/cards/autocomplete?q=" + encodeURIComponent(q)); if (seq === acSeq) showSuggest(r.data || []); }
+    catch { /* sem sugestões */ }
+  }, 220);
+});
+$("#guess").addEventListener("keydown", e => {
+  if (e.key === "ArrowDown") { e.preventDefault(); moveSel(1); }
+  else if (e.key === "ArrowUp") { e.preventDefault(); moveSel(-1); }
+  else if (e.key === "Escape") hideSuggest();
+  else if (e.key === "Enter" && acSel >= 0) { e.preventDefault(); const n = acItems[acSel]; $("#guess").value = n; submitGuess(n); }
+});
+$("#suggest").addEventListener("mousedown", e => {
+  const li = e.target.closest("li"); if (!li) return;
+  e.preventDefault(); const n = acItems[+li.dataset.i]; $("#guess").value = n; submitGuess(n);
+});
+$("#guess").addEventListener("blur", () => setTimeout(hideSuggest, 120));
+$("#form").addEventListener("submit", e => { e.preventDefault(); acSeq++; clearTimeout(acTimer); submitGuess($("#guess").value); });
+$("#btn-skip").addEventListener("click", () => { if (card && game.status === "playing") { $("#note").textContent = ""; addGuess(null, "skip"); } });
+
+/* ---------- Estatísticas ---------- */
+function blankStats(){ return {played:0, wins:0, streak:0, best:0, dist:[0,0,0,0,0,0], times:[], last:null}; }
+function recordStats(){
+  const k = `stats:${challenge}:${diff}`, s = store.get(k, blankStats()), day = todayKey();
+  if (s.last === day) return;
+  const y = new Date(); y.setDate(y.getDate()-1);
+  const yKey = `${y.getFullYear()}-${String(y.getMonth()+1).padStart(2,"0")}-${String(y.getDate()).padStart(2,"0")}`;
+  s.played++;
+  if (game.status === "won") {
+    s.wins++; s.dist[game.guesses.length-1]++; s.times.push(game.elapsed);
+    s.streak = (s.lastWin === yKey ? s.streak : 0) + 1; s.best = Math.max(s.best, s.streak); s.lastWin = day;
+  } else s.streak = 0;
+  s.last = day; store.set(k, s);
+}
+function openStats(){
+  const c = isDaily() ? challenge : "geral";
+  const s = store.get(`stats:${c}:${diff}`, blankStats());
+  $("#stats-mode").textContent = `${CHALLENGES[c].name} · ${D().name}`;
+  const avg = s.times.length ? s.times.reduce((a,b)=>a+b,0)/s.times.length : 0;
+  const bestT = s.times.length ? Math.min(...s.times) : 0;
+  $("#stat-grid").innerHTML = [
+    [s.played,"Jogos"], [s.played ? Math.round(100*s.wins/s.played)+"%" : "–","Vitórias"],
+    [s.streak,"Sequência"], [s.best,"Melhor seq."],
+    [bestT ? fmtTime(bestT) : "–","Melhor tempo"], [avg ? fmtTime(avg) : "–","Tempo médio"],
+  ].map(([v,l]) => `<div><b>${v}</b><span>${l}</span></div>`).join("");
+  const max = Math.max(1, ...s.dist);
+  const cur = isDaily() && game.status === "won" ? game.guesses.length - 1 : -1;
+  $("#dist").innerHTML = "<div style='color:var(--muted)'>Acertos por tentativa</div>" + s.dist.map((n,i) =>
+    `<div><span>${i+1}</span><span class="bar ${i===cur?"hl":""}" style="width:${8 + 92*n/max}%">${n}</span></div>`).join("");
+  $("#dlg-stats").showModal();
+}
+
+/* ---------- Início ---------- */
+$("#challenges").addEventListener("click", e => {
+  const b = e.target.closest("[data-c]"); if (!b) return;
+  if (b.dataset.c === challenge) { if (challenge === "treino" && game.status !== "playing") { game = newGame("treino", diff); save(); start(); } return; }
+  pauseCurrent(); challenge = b.dataset.c; load();
+});
+$("#diffs").addEventListener("click", e => {
+  const b = e.target.closest("[data-d]"); if (!b || b.dataset.d === diff) return;
+  pauseCurrent(); diff = b.dataset.d; load();
+});
+$("#btn-help").onclick = () => $("#dlg-help").showModal();
+$("#btn-stats").onclick = openStats;
+if (!store.get("seenHelp")) { store.set("seenHelp", true); $("#dlg-help").showModal(); }
+load();
+window.__artle = { get game(){ return game; }, get card(){ return card; } }; // para depuração
+})();
+</script>
+</body>
+</html>
