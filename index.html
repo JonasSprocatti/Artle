@@ -210,6 +210,7 @@ footer a{color:var(--muted)}
 const MAX_TRIES = 6;
 const EPOCH = Date.UTC(2026, 10, 23);       // Artle #1 = 23/11/2026
 const API = "https://api.scryfall.com";
+const GAME_URL = "https://jonassprocatti.github.io/Artle/";
 
 // Cartas conhecidas para a "carta do dia". Fácil de trocar/ampliar.
 const POOL = ["Sol Ring","Lightning Bolt","Counterspell","Llanowar Elves","Dark Ritual","Swords to Plowshares","Wrath of God","Serra Angel","Shivan Dragon","Birds of Paradise","Giant Growth","Doom Blade","Brainstorm","Ponder","Demonic Tutor","Vampiric Tutor","Cultivate","Kodama's Reach","Rampant Growth","Path to Exile","Thoughtseize","Tarmogoyf","Snapcaster Mage","Jace, the Mind Sculptor","Liliana of the Veil","Elspeth, Sun's Champion","Craterhoof Behemoth","Emrakul, the Aeons Torn","Ulamog, the Infinite Gyre","Griselbrand","Sheoldred, the Apocalypse","Atraxa, Praetors' Voice","The Ur-Dragon","Edgar Markov","Krenko, Mob Boss","Meren of Clan Nel Toth","Rhystic Study","Smothering Tithe","Cyclonic Rift","Arcane Signet","Lightning Greaves","Swiftfoot Boots","Eternal Witness","Sakura-Tribe Elder","Beast Within","Chaos Warp","Blasphemous Act","Toxic Deluge","Damnation","Supreme Verdict","Terminate","Fatal Push","Baneslayer Angel","Thragtusk","Primeval Titan","Grave Titan","Sun Titan","Consecrated Sphinx","Platinum Angel","Wurmcoil Engine","Solemn Simulacrum","Phyrexian Arena","Necropotence","Sylvan Library","Force of Will","Mana Drain","Dockside Extortionist","Ragavan, Nimble Pilferer","Goblin Guide","Monastery Swiftspear","Stoneforge Mystic","Mother of Runes","Dark Confidant","Avacyn, Angel of Hope","Akroma, Angel of Wrath","Progenitus","Kozilek, Butcher of Truth","Ugin, the Spirit Dragon","Karn Liberated","Teferi, Hero of Dominaria","Chandra, Torch of Defiance","Nissa, Who Shakes the World","Gideon, Ally of Zendikar","Garruk Wildspeaker","Vraska, Golgari Queen","Niv-Mizzet, Parun","Prossh, Skyraider of Kher","Kaalia of the Vast","Muldrotha, the Gravetide","Korvold, Fae-Cursed King","Yuriko, the Tiger's Shadow","Doubling Season","Parallel Lives","Panharmonicon","Lotus Petal","Mox Diamond","Chrome Mox","Ornithopter","Grim Lavamancer","Fireball","Pacifism","Grizzly Bears","Juzám Djinn","Thalia, Guardian of Thraben","Brimaz, King of Oreskos","Questing Beast","Death's Shadow","Uro, Titan of Nature's Wrath","Oko, Thief of Crowns","Murktide Regent","Fury","Solitude","Grief","Endurance","Lord of Atlantis","Elvish Archdruid","Ezuri, Renegade Leader","Shock","Hymn to Tourach","Sinkhole","Wild Growth","Mind Twist","Gaea's Cradle","Strip Mine","Wasteland"];
@@ -438,7 +439,7 @@ function renderHints(){
 function shareText(){
   const sq = game.guesses.map(g => g.r==="ok"?"🟩":g.r==="skip"?"⬛":"🟥").join("") + "⬜".repeat(MAX_TRIES - game.guesses.length);
   const score = game.status === "won" ? `${game.guesses.length}/${MAX_TRIES}` : `X/${MAX_TRIES}`;
-  return `${title()}\n${sq} ${score} · ⏱ ${fmtTime(game.elapsed)}`;
+  return `${title()}\n${sq} ${score} · ⏱ ${fmtTime(game.elapsed)}\n${GAME_URL}`;
 }
 function renderResult(){
   const won = game.status === "won", errs = wrongCount();
@@ -636,7 +637,7 @@ function dayText(){
   const list = dayGames(), t = dayTotals(list);
   const lines = t.fin.map(x => `${x.c.name} · ${x.d.name}: ${squares(x.g)} ${x.g.status === "won" ? x.g.guesses.length : "X"}/${MAX_TRIES} · ⏱ ${fmtTime(x.g.elapsed)}`);
   return [`Artle #${dayNumber()} · Resumo do dia`, ...lines, "",
-    `Acertos: ${t.won.length}/${t.fin.length} · Tempo total: ${fmtTime(t.time)}` + (t.won.length ? ` · Média: ${t.avgTries.toFixed(1).replace(".",",")} tentativas` : "")].join("\n");
+    `Acertos: ${t.won.length}/${t.fin.length} · Tempo total: ${fmtTime(t.time)}` + (t.won.length ? ` · Média: ${t.avgTries.toFixed(1).replace(".",",")} tentativas` : ""), GAME_URL].join("\n");
 }
 $("#btn-day").onclick = openDay;
 $("#btn-day-copy").onclick = async e => {
