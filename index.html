@@ -103,6 +103,18 @@ dialog h2{font:700 1.3rem var(--font-display);margin:0 0 12px}
 .dist div{display:flex;gap:6px;align-items:center}
 .dist .bar{background:var(--panel-2);padding:2px 6px;border-radius:3px;text-align:right;min-width:24px}
 .dist .bar.hl{background:var(--ok);color:#1a1410}
+.day-totals{display:flex;gap:16px;flex-wrap:wrap;font-family:var(--font-mono);font-size:.85rem;color:var(--muted);margin-bottom:10px}
+.day-totals b{color:var(--fg);font-weight:500}
+.day-scroll{overflow-x:auto;margin-bottom:8px}
+table.day{border-collapse:collapse;width:100%;font-size:.85rem}
+table.day th{font:500 .7rem/1.2 var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:left;padding:4px 6px}
+table.day td{padding:3px}
+table.day th[scope=row]{white-space:nowrap;font:inherit;text-transform:none;letter-spacing:0;color:var(--fg)}
+.cell{width:100%;min-width:66px;border:1px solid var(--line);background:var(--panel-2);border-radius:6px;padding:5px 6px;text-align:left;font:500 .78rem/1.3 var(--font-mono);font-variant-numeric:tabular-nums;color:var(--muted)}
+.cell.won{border-color:var(--ok);color:var(--fg)} .cell.lost{border-color:var(--bad);color:var(--fg)} .cell.playing{border-style:dashed;color:var(--fg)}
+.cell:hover{border-color:var(--accent)}
+.day-tip{font-size:.8rem;color:var(--muted);margin:0 0 12px}
+.day-fallback{white-space:pre-wrap;font:.8rem/1.4 var(--font-mono);background:var(--bg);padding:10px;border-radius:6px;user-select:all}
 footer{font-size:.78rem;color:var(--muted);line-height:1.5}
 footer a{color:var(--muted)}
 @media (prefers-reduced-motion:reduce){.art img{transition:none}}
@@ -116,6 +128,7 @@ footer a{color:var(--muted)}
     <div class="icon-btns">
       <button class="ghost" id="btn-help" type="button">Como jogar</button>
       <button class="ghost" id="btn-stats" type="button">Estatísticas</button>
+      <button class="ghost" id="btn-day" type="button">Resumo do dia</button>
     </div>
   </header>
 
@@ -165,8 +178,21 @@ footer a{color:var(--muted)}
   <p>Você vê só a arte de uma carta de Magic. Descubra qual é em até <b>6 tentativas</b>.</p>
   <p>Cada erro (ou "Pular") libera uma dica: custo de mana, tipo, coleção, texto e artista.</p>
   <p><b>Fácil</b>: arte inteira. <b>Médio</b>: começa com zoom num detalhe, que abre a cada erro. <b>Difícil</b>: zoom maior e desfoque, e as dicas demoram uma rodada a mais.</p>
+  <p>Em <b>Resumo do dia</b> você vê todos os desafios de hoje, com acertos e tempo de cada um, e copia a lista completa para mandar para os amigos.</p>
   <p>Todo dia tem o desafio <b>Geral</b> (qualquer carta) e um desafio para cada cor: branco, azul, preto, vermelho, verde, multicolor e incolor. Cada desafio e dificuldade tem a sua carta, que muda à meia-noite. O cronômetro começa quando a arte aparece. <b>Treino</b> sorteia cartas à vontade e não conta nas estatísticas.</p>
   <button class="primary" type="button" style="padding:8px 18px" onclick="this.closest('dialog').close()">Bora</button>
+</dialog>
+
+<dialog id="dlg-day">
+  <h2>Resumo do dia · <span id="day-num"></span></h2>
+  <div class="day-totals" id="day-totals"></div>
+  <div class="day-scroll"><table class="day" id="day-table"></table></div>
+  <p class="day-tip">Toque numa célula para jogar aquele desafio.</p>
+  <div class="row" style="display:flex;gap:8px;flex-wrap:wrap">
+    <button class="primary" type="button" id="btn-day-copy" style="padding:8px 16px">Copiar resumo</button>
+    <button class="ghost" type="button" onclick="this.closest('dialog').close()">Fechar</button>
+  </div>
+  <pre class="day-fallback" id="day-fallback" hidden></pre>
 </dialog>
 
 <dialog id="dlg-stats">
@@ -424,6 +450,7 @@ function renderResult(){
     <div class="row">
       <button class="primary" type="button" id="btn-share" style="padding:8px 16px">Copiar resultado</button>
       <button class="ghost" type="button" id="btn-show-stats">Estatísticas</button>
+      ${isDaily() ? '<button class="ghost" type="button" id="btn-show-day">Resumo do dia</button>' : ""}
       ${challenge === "treino" ? '<button class="ghost" type="button" id="btn-next">Próxima carta</button>' : ""}
     </div>
     ${isDaily() ? '<div class="countdown" id="countdown"></div>' : ""}`;
@@ -433,6 +460,7 @@ function renderResult(){
     catch { $("#note").textContent = t; }
   };
   $("#btn-show-stats").onclick = openStats;
+  if ($("#btn-show-day")) $("#btn-show-day").onclick = openDay;
   if ($("#btn-next")) $("#btn-next").onclick = () => { game = newGame("treino", diff); save(); start(); };
   updateCountdown();
 }
@@ -561,6 +589,68 @@ function openStats(){
     `<div><span>${i+1}</span><span class="bar ${i===cur?"hl":""}" style="width:${8 + 92*n/max}%">${n}</span></div>`).join("");
   $("#dlg-stats").showModal();
 }
+
+/* ---------- Resumo do dia ---------- */
+function dayGames(){
+  const out = [];
+  for (const [ck, c] of Object.entries(CHALLENGES)) {
+    if (!c.daily) continue;
+    for (const [dk, d] of Object.entries(DIFFS)) {
+      const g = (ck === challenge && dk === diff) ? game : store.get(gameKey(ck, dk));
+      out.push({ck, dk, c, d, g});
+    }
+  }
+  return out;
+}
+function gameTime(x){ return x.g.elapsed + (x.g === game && game.status === "playing" && game.startedAt ? Date.now() - game.startedAt : 0); }
+function squares(g){ return g.guesses.map(x => x.r==="ok"?"🟩":x.r==="skip"?"⬛":"🟥").join("") + (g.status === "playing" ? "" : "⬜".repeat(MAX_TRIES - g.guesses.length)); }
+function dayTotals(list){
+  const fin = list.filter(x => x.g && x.g.status !== "playing");
+  const won = fin.filter(x => x.g.status === "won");
+  const time = fin.reduce((a, x) => a + x.g.elapsed, 0);
+  const tries = won.reduce((a, x) => a + x.g.guesses.length, 0);
+  return {fin, won, time, avgTries: won.length ? tries / won.length : 0};
+}
+function openDay(){
+  const list = dayGames(), t = dayTotals(list), total = list.length;
+  $("#day-num").textContent = "#" + dayNumber();
+  $("#day-totals").innerHTML = `<span>Jogados <b>${t.fin.length}/${total}</b></span><span>Acertos <b>${t.won.length}</b></span><span>Tempo total <b>${fmtTime(t.time)}</b></span>${t.won.length ? `<span>Média <b>${t.avgTries.toFixed(1).replace(".",",")}</b> tentativas</span>` : ""}`;
+  const rows = Object.entries(CHALLENGES).filter(([,c]) => c.daily).map(([ck, c]) => {
+    const cells = Object.keys(DIFFS).map(dk => {
+      const x = list.find(y => y.ck === ck && y.dk === dk), g = x.g;
+      let cls = "", txt = "—";
+      if (g && g.status === "won") { cls = "won"; txt = `✓ ${g.guesses.length}/${MAX_TRIES}<br>${fmtTime(g.elapsed)}`; }
+      else if (g && g.status === "lost") { cls = "lost"; txt = `✗ X/${MAX_TRIES}<br>${fmtTime(g.elapsed)}`; }
+      else if (g && (g.guesses.length || g.startedAt || g.elapsed)) { cls = "playing"; txt = `… ${g.guesses.length}/${MAX_TRIES}<br>${fmtTime(gameTime(x))}`; }
+      return `<td><button class="cell ${cls}" type="button" data-go="${ck}:${dk}" aria-label="${c.name} ${DIFFS[dk].name}">${txt}</button></td>`;
+    }).join("");
+    return `<tr><th scope="row">${c.dot ? `<span class="dot" style="background:${c.dot}"></span>` : ""}${c.name}</th>${cells}</tr>`;
+  }).join("");
+  $("#day-table").innerHTML = `<thead><tr><th></th>${Object.values(DIFFS).map(d => `<th>${d.name}</th>`).join("")}</tr></thead><tbody>${rows}</tbody>`;
+  $("#day-fallback").hidden = true;
+  $("#btn-day-copy").textContent = "Copiar resumo";
+  $("#btn-day-copy").disabled = !t.fin.length;
+  if (!$("#dlg-day").open) $("#dlg-day").showModal();
+}
+function dayText(){
+  const list = dayGames(), t = dayTotals(list);
+  const lines = t.fin.map(x => `${x.c.name} · ${x.d.name}: ${squares(x.g)} ${x.g.status === "won" ? x.g.guesses.length : "X"}/${MAX_TRIES} · ⏱ ${fmtTime(x.g.elapsed)}`);
+  return [`Artle #${dayNumber()} · Resumo do dia`, ...lines, "",
+    `Acertos: ${t.won.length}/${t.fin.length} · Tempo total: ${fmtTime(t.time)}` + (t.won.length ? ` · Média: ${t.avgTries.toFixed(1).replace(".",",")} tentativas` : "")].join("\n");
+}
+$("#btn-day").onclick = openDay;
+$("#btn-day-copy").onclick = async e => {
+  const txt = dayText();
+  try { await navigator.clipboard.writeText(txt); e.target.textContent = "Copiado!"; }
+  catch { const pre = $("#day-fallback"); pre.textContent = txt; pre.hidden = false; }
+};
+$("#day-table").addEventListener("click", e => {
+  const b = e.target.closest("[data-go]"); if (!b) return;
+  const [ck, dk] = b.dataset.go.split(":");
+  $("#dlg-day").close();
+  if (ck === challenge && dk === diff) return;
+  pauseCurrent(); challenge = ck; diff = dk; load();
+});
 
 /* ---------- Início ---------- */
 $("#challenges").addEventListener("click", e => {
